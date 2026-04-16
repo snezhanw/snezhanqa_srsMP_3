@@ -1,0 +1,28 @@
+body {
+    background-color: #fff0f5;
+}
+
+h1, h2, h3 {
+    color: #C71585;
+}
+
+.stButton>button {
+    background: linear-gradient(45deg, #FF69B4, #FF1493);
+    color: white;
+    border-radius: 25px;
+    padding: 10px 20px;
+    font-weight: bold;
+}
+
+.stTextInput input, .stTextArea textarea {
+    border-radius: 10px;
+    border: 1px solid #FF69B4;
+}
+
+.card {
+    background-color: white;
+    padding: 20px;
+    border-radius: 20px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    margin-bottom: 15px;
+}

@@ -1,0 +1,5 @@
+streamlit
+crewai==0.28.8
+langchain-google-genai
+python-dotenv
+setuptools
