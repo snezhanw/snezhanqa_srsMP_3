@@ -1,196 +1,136 @@
 import streamlit as st
 import os
 from dotenv import load_dotenv
-
-from crewai import Agent, Task, Crew, Process
+from crewai import Agent, Task, Crew, Process, LLM
 from crewai_tools import FileReadTool, SerperDevTool
-from langchain_google_genai import ChatGoogleGenerativeAI
 
-# 1. ENV
 load_dotenv()
 
 os.environ["SERPER_API_KEY"] = os.getenv("SERPER_API_KEY", "")
 os.environ["GOOGLE_API_KEY"] = os.getenv("GOOGLE_API_KEY", "")
 
-if not os.environ["GOOGLE_API_KEY"]:
-    st.error("❌ Нет GOOGLE_API_KEY")
-    st.stop()
-
-llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash")
+llm = LLM(
+    model="gemini/gemini-1.5-flash",
+    api_key=os.environ["GOOGLE_API_KEY"]
+)
 
 file_tool = FileReadTool()
 search_tool = SerperDevTool()
 
-# 2. UI
-st.set_page_config(page_title="KazNU Multi-Agent", layout="wide")
+st.set_page_config(page_title="KazNU Multi-Agent System", layout="wide")
 
 def load_css():
-    with open("style.css", encoding="utf-8") as f:
-        st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+    st.markdown("""
+    <style>
+    .stApp {background-color: #fff0f6;}
+    h1, h2, h3 {color: #d63384;}
+    .stButton>button {
+        background-color: #ff69b4;
+        color: white;
+        border-radius: 12px;
+        padding: 8px 16px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
 load_css()
 
-# 3. MEMORY
-if "history" not in st.session_state:
-    st.session_state.history = []
+st.title("🌸 KazNU Multi-Agent AI System")
 
-# 4. SIDEBAR
-st.sidebar.title("Навигация")
-st.sidebar.info("Multi-Agent System")
-
-st.title("🌸 KazNU Multi-Agent System")
 st.image("banner.jpg", use_container_width=True)
 
-# 5. AGENT CONFIG
-st.header("⚙️ Конфигурация")
+st.sidebar.header("⚙️ Agent Settings")
 
-with st.expander("Редактирование"):
-    col1, col2 = st.columns(2)
+user_country = st.text_input("Country")
+req_type = st.selectbox("Scenario", ["General", "Study", "Housing", "Leisure"])
 
-    with col1:
-        r_analyst = st.text_input("Роль аналитика", "Культурный аналитик")
-        g_analyst = st.text_input("Цель аналитика", "Анализ студента")
+knowledge = st.text_area("Knowledge Base", value="Campus rules and regulations")
 
-    with col2:
-        r_guide = st.text_input("Роль гида", "Навигатор кампуса")
-        g_guide = st.text_input("Цель гида", "Маршрут")
+uploaded_file = st.file_uploader("Upload infrastructure file", type=["txt"])
 
-# 6. INPUT
-st.header("📝 Вход")
+infra_path = None
 
-user_question = st.text_area("Вопрос", "Сделай маршрут по кампусу")
+if uploaded_file:
+    with open("temp.txt", "wb") as f:
+        f.write(uploaded_file.getbuffer())
+    infra_path = "temp.txt"
+else:
+    infra_path = "infrastructure.txt"
 
-col1, col2 = st.columns(2)
+st.markdown("---")
 
-with col1:
-    user_country = st.text_input("Страна", "Южная Корея")
-    req_type = st.selectbox("Тип", ["Общий", "Учеба", "Жилье", "Досуг"])
-
-    k_base = st.text_area("Knowledge", "СББП помогает студентам")
-
-with col2:
-    uploaded_file = st.file_uploader("Файл infrastructure.txt", type=["txt"])
-
-    infra_path = None
-    infra_text = ""
-
-    if uploaded_file:
-        with open("temp_infra.txt", "wb") as f:
-            f.write(uploaded_file.getbuffer())
-        infra_path = "temp_infra.txt"
-        st.success("Файл загружен")
-
-    elif os.path.exists("data/infrastructure.txt"):
-        infra_path = "data/infrastructure.txt"
-        st.info("Используется файл по умолчанию")
-
-if infra_path:
-    with open(infra_path, encoding="utf-8") as f:
-        infra_text = f.read()
-
-rules_text = ""
-if os.path.exists("rules.txt"):
-    with open("rules.txt", encoding="utf-8") as f:
-        rules_text = f.read()
-
-# 7. RUN
-st.header("🚀 Запуск")
-
-if st.button("Сгенерировать"):
+if st.button("🚀 Run System"):
 
     if not infra_path:
-        st.error("Нет файла инфраструктуры")
+        st.error("No infrastructure file")
         st.stop()
 
-    st.session_state.history.append({
-        "question": user_question,
-        "country": user_country,
-        "type": req_type
-    })
-
     analyst = Agent(
-        role=r_analyst,
-        goal=g_analyst,
-        backstory="Анализ студентов",
+        role="Analyst",
+        goal="Analyze student request",
+        backstory="Expert in student adaptation",
         tools=[search_tool],
         llm=llm,
         verbose=True
     )
 
     guide = Agent(
-        role=r_guide,
-        goal=g_guide,
-        backstory="Маршруты кампуса",
+        role="Guide",
+        goal="Create campus navigation plan",
+        backstory="Uses campus infrastructure data",
         tools=[file_tool],
         llm=llm,
         memory=True,
         verbose=True
     )
 
-    critic = Agent(
-        role="Контролер",
-        goal="Безопасность",
-        backstory="Проверка правил",
+    controller = Agent(
+        role="Controller",
+        goal="Validate output safety",
+        backstory="Ensures compliance with rules",
         llm=llm,
         verbose=True
     )
 
     tasks = []
 
-    tasks.append(Task(
-        description=f"""
-Вопрос: {user_question}
-Страна: {user_country}
-Тип: {req_type}
-Knowledge: {k_base}
-Rules: {rules_text}
-        """,
-        expected_output="Анализ",
+    t1 = Task(
+        description=f"Analyze student from {user_country}. Knowledge: {knowledge}",
+        expected_output="Student profile summary",
         agent=analyst
-    ))
+    )
+    tasks.append(t1)
 
-    if req_type == "Общий":
+    if req_type == "General":
         tasks.append(Task(
-            description="Задай уточняющие вопросы",
-            expected_output="Вопросы",
+            description="Ask clarification questions",
+            expected_output="List of questions",
             agent=analyst
         ))
 
-    tasks.append(Task(
-        description=f"""
-Инфраструктура:
-{infra_text}
-
-Сделай маршрут для {req_type}
-        """,
-        expected_output="Маршрут",
+    t2 = Task(
+        description=f"Use file {infra_path} to create plan for {req_type}",
+        expected_output="Campus route plan",
         agent=guide
-    ))
+    )
+    tasks.append(t2)
 
-    tasks.append(Task(
-        description="Финальный отчет",
-        expected_output="Готовый гид",
-        agent=critic
-    ))
+    t3 = Task(
+        description="Finalize result in structured format",
+        expected_output="Final report",
+        agent=controller,
+        human_input=True
+    )
+    tasks.append(t3)
 
     crew = Crew(
-        agents=[analyst, guide, critic],
+        agents=[analyst, guide, controller],
         tasks=tasks,
         process=Process.sequential,
         memory=True
     )
 
-    with st.spinner("Генерация..."):
-        result = crew.kickoff()
+    result = crew.kickoff()
 
-    st.subheader("Результат")
-
-    if st.checkbox("Подтвердить"):
-        st.markdown(f"<div class='card'>{result.raw}</div>", unsafe_allow_html=True)
-        st.balloons()
-
-# 8. HISTORY
-st.header("История")
-
-for i in st.session_state.history:
-    st.markdown(f"<div class='card'>❓ {i['question']}<br>🌍 {i['country']}<br>📌 {i['type']}</div>", unsafe_allow_html=True)
+    st.subheader("📌 Result")
+    st.markdown(result.raw)
