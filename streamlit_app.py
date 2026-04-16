@@ -15,7 +15,6 @@ if not os.environ["GOOGLE_API_KEY"]:
     st.error("❌ Нет GOOGLE_API_KEY")
     st.stop()
 
-# ✔ FIX: правильный LLM для CrewAI
 llm = LLM(
     model="gemini/gemini-1.5-flash",
     api_key=os.environ["GOOGLE_API_KEY"]
@@ -42,6 +41,7 @@ st.sidebar.title("Навигация")
 st.sidebar.info("Multi-Agent System")
 
 st.title("🌸 KazNU Multi-Agent System")
+st.image("banner.jpg", use_container_width=True)
 
 # 5. AGENT CONFIG
 st.header("⚙️ Конфигурация")
